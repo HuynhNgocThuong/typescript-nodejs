@@ -1,60 +1,99 @@
-import * as fs from 'fs';
-import * as util from 'util'
-import { Writable } from 'stream';
-const stream01 = fs.createWriteStream('./file01.txt');
+import { IncomingHttpHeaders, request } from 'http';
+import { RequestOptions } from 'https';
+import  FormData from 'form-data';
+import { createReadStream, createWriteStream } from 'fs';
+// const fileStream = createWriteStream('./file.txt');
  
-stream01.write('Hello world!', () => {
-  console.log('File created!');
-});
-
-const stream02 = fs.createWriteStream('./file02.txt');
+// const req = request(
+//   {
+//     host: 'jsonplaceholder.typicode.com',
+//     path: '/todos/1',
+//     method: 'GET',
+//   },
+//   response => {
+//     response.pipe(fileStream);
+//   }
+// );
  
-stream02.on('finish', () => {
-  console.log('All the data is transmitted');
-});
- 
-stream02.write('Hello ');
-stream02.write('world!')
-
-// Pipes
-const readable = fs.createReadStream('./file01.txt');
-const writable = fs.createWriteStream('./file02.txt');
- 
-writable.on('finish', () => {
-  console.log('The end!');
-});
- 
-readable.pipe(writable);
-
-// Writable stream under the hood
-const writable01 = new Writable();
- 
-writable01._write = function(chunk, encoding, next) {
-  console.log(chunk.toString());
-  next();
-};
- 
-writable01.write('Hello world!');
-
-
-const writeFile = util.promisify(fs.writeFile);
- 
-class WritableFileStream extends Writable {
-  path: string;
- 
-  constructor(path: string) {
-    super();
-    this.path = path;
-  }
- 
-  _write(chunk: any, encoding: string, next: (error?: Error) => void) {
-    writeFile(this.path, chunk)
-      .then(() => next())
-      .catch((error) => next(error));
-  }
+// req.end();
+interface Response {
+  data: object,
+  headers: IncomingHttpHeaders
 }
+function performRequest(options: RequestOptions){
+  return new Promise((resolve, reject)=>{
+    request(options,       
+      function(response) {
+      const { statusCode, headers } = response;
+      if (statusCode as number >= 300) {
+        reject(
+          new Error(response.statusMessage as string)
+        )
+      }
+      const chunks: any = [];
+      response.on('data', (chunk) => {
+        chunks.push(chunk);
+      });
+      response.on('end', () => {
+        const data = Buffer.concat(chunks).toString();
+          const result: Response = {
+            data: JSON.parse(data),
+            headers,
+          };
+          resolve(result);
+      });
+    }
+  ).end();
+  });
+}
+
+performRequest(
+  {
+    host: 'jsonplaceholder.typicode.com',
+    path: '/todos/1',
+    method: 'GET',
+  },
+)
+  .then(response => {
+    console.log(response);
+  })
+  .catch(error => {
+    console.log(error);
+  });
+
+
+const readStream = createReadStream('./photo.jpg');
  
-const readable02 = fs.createReadStream('./file03.txt');
-const writable02 = new WritableFileStream('./file04.txt');
+const form = new FormData();
+form.append('photo', readStream);
+form.append('firstName', 'Marcin');
+form.append('lastName', 'Wanago');
  
-readable02.pipe(writable02);
+const req = request(
+  {
+    host: 'localhost',
+    port: '5000',
+    path: '/upload',
+    method: 'POST',
+    headers: form.getHeaders(),
+  },
+  response => {
+    console.log(response.statusCode); // 200
+  }
+);
+ 
+form.pipe(req);
+
+// Pipe form into a file and read it
+const readStream01 = createReadStream('./photo.jpg');
+const writeStream01 = createWriteStream('./file.txt');
+ 
+const form01 = new FormData();
+form01.append('photo', readStream01);
+form01.append('firstName', 'Marcin');
+form01.append('lastName', 'Wanago');
+ 
+console.log(form01.getHeaders());
+ 
+form01.pipe(writeStream01);
+
